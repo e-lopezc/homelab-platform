@@ -1,0 +1,33 @@
+---
+- name: Install k3s server
+  ansible.builtin.shell:
+    cmd: >-
+      curl -sfL https://get.k3s.io |
+      INSTALL_K3S_VERSION="{{ k3s_version }}"
+      sh -s - server
+      --write-kubeconfig-mode 644
+      --node-ip {{ ansible_host }}
+      --tls-san {{ ansible_host }}
+    creates: /usr/local/bin/k3s
+
+- name: Wait for the node-token to be written
+  ansible.builtin.wait_for:
+    path: /var/lib/rancher/k3s/server/node-token
+    timeout: 120
+
+- name: Read the node-token
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_token_file
+
+- name: Expose the join token to the agent play
+  ansible.builtin.set_fact:
+    k3s_node_token: "{{ k3s_token_file.content | b64decode | trim }}"
+
+- name: Wait until the server node reports Ready
+  ansible.builtin.command: k3s kubectl get nodes --no-headers
+  register: k3s_nodes
+  until: "'Ready' in k3s_nodes.stdout"
+  retries: 20
+  delay: 6
+  changed_when: false
