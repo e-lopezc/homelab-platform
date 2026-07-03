@@ -1,0 +1,25 @@
+# Copy to terraform.tfvars (gitignored) and fill in real values.
+#
+# The API token is NOT set here — export it into your shell instead:
+#   export PROXMOX_VE_API_TOKEN='user@pam!terraform=xxxxxxxx-xxxx-...'
+
+proxmox_endpoint = "https://pve.lan:8006/"
+proxmox_insecure = true
+proxmox_node     = "pve"
+
+vm_template_id    = 9000 # VMID of the Ubuntu 24.04 cloud-init template you create
+vm_datastore      = "local-lvm"
+vm_network_bridge = "vmbr0"
+vm_gateway        = "192.168.1.1"
+
+ssh_public_keys = [
+  "ssh-ed25519 AAAA... you@host",
+]
+
+# 1 server + 2 agents. Totals here = 6 vCPU / 15 GB, matching the budget.
+# Tune freely.
+nodes = {
+  k3s-server-1 = { role = "server", vmid = 110, cores = 2, memory = 6144, disk = 40, ip = "192.168.1.21/24" }
+  k3s-agent-1  = { role = "agent", vmid = 111, cores = 2, memory = 4608, disk = 40, ip = "192.168.1.22/24" }
+  k3s-agent-2  = { role = "agent", vmid = 112, cores = 2, memory = 4608, disk = 40, ip = "192.168.1.23/24" }
+}

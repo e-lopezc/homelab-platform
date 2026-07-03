@@ -1,0 +1,44 @@
+# ── Terraform ───────────────────────────────────────────────
+# State holds secrets in plaintext — never commit it.
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+# Host-specific values (commit *.tfvars.example instead).
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# ── Ansible ─────────────────────────────────────────────────
+*.retry
+vault-password*
+*.vault-pass
+
+# ── Kubernetes / cluster access ─────────────────────────────
+kubeconfig
+*.kubeconfig
+kube_config*
+.kube/
+
+# ── Secrets / credentials ───────────────────────────────────
+.env
+.env.*
+!.env.example
+*.age
+*.agekey
+age.key
+*-unseal-keys*
+*.pem
+*.key
+
+# ── OS / editor noise ───────────────────────────────────────
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# ── Local-only docs (working notes, not for the public repo) ──
+docs/PROGRESS.md
