@@ -41,6 +41,11 @@
         mkdir -p ~/.kube
         if [ -f ~/.kube/config ]; then
           cp ~/.kube/config ~/.kube/config.bak.$(date +%Y%m%d%H%M%S)
+          # Drop stale homelab entries so a rebuilt cluster's fresh certs win
+          # (kubectl merge is "first-wins", so old entries would otherwise persist).
+          kubectl config delete-context homelab >/dev/null 2>&1 || true
+          kubectl config delete-cluster homelab >/dev/null 2>&1 || true
+          kubectl config delete-user    homelab >/dev/null 2>&1 || true
         fi
         KUBECONFIG=~/.kube/config:{{ playbook_dir }}/homelab.kubeconfig \
           kubectl config view --flatten > ~/.kube/config.new
