@@ -1,4 +1,4 @@
-# Copy to inventory.ini (gitignored) and set your real node IPs.
+# To use this file, copy it to inventory.ini (gitignored) and set your real node IPs.
 # Group names (server / agents) drive the k3s install mode — do not rename.
 [server]
 k3s-server-1 ansible_host=192.168.1.21
