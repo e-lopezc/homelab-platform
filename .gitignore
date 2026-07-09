@@ -16,6 +16,8 @@ crash.*.log
 *.retry
 vault-password*
 *.vault-pass
+# Real host inventory (commit inventory.ini.example instead).
+infra/ansible/inventory.ini
 
 # ── Kubernetes / cluster access ─────────────────────────────
 kubeconfig

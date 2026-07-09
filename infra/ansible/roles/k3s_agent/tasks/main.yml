@@ -1,0 +1,11 @@
+---
+- name: Install and join k3s agent
+  ansible.builtin.shell:
+    cmd: >-
+      curl -sfL https://get.k3s.io |
+      INSTALL_K3S_VERSION="{{ k3s_version }}"
+      K3S_URL="https://{{ hostvars[groups['server'][0]].ansible_host }}:6443"
+      K3S_TOKEN="{{ hostvars[groups['server'][0]].k3s_node_token }}"
+      sh -s - agent
+      --node-ip {{ ansible_host }}
+    creates: /usr/local/bin/k3s
