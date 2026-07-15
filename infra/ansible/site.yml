@@ -36,21 +36,27 @@
       become: false
 
     - name: Merge the homelab context into ~/.kube/config (backs up existing first)
-      ansible.builtin.shell: |
-        set -e
-        mkdir -p ~/.kube
-        if [ -f ~/.kube/config ]; then
-          cp ~/.kube/config ~/.kube/config.bak.$(date +%Y%m%d%H%M%S)
-          # Drop stale homelab entries so a rebuilt cluster's fresh certs win
-          # (kubectl merge is "first-wins", so old entries would otherwise persist).
-          kubectl config delete-context homelab >/dev/null 2>&1 || true
-          kubectl config delete-cluster homelab >/dev/null 2>&1 || true
-          kubectl config delete-user    homelab >/dev/null 2>&1 || true
-        fi
-        KUBECONFIG=~/.kube/config:{{ playbook_dir }}/homelab.kubeconfig \
-          kubectl config view --flatten > ~/.kube/config.new
-        mv ~/.kube/config.new ~/.kube/config
-        chmod 600 ~/.kube/config
+      # Use the explicit `cmd:` parameter (not bare free-form) so ansible-core's
+      # argument splitter doesn't try to parse the shell body — and keep the body
+      # Jinja-free by passing the kubeconfig path in via `environment:`.
+      ansible.builtin.shell:
+        cmd: |
+          set -e
+          mkdir -p ~/.kube
+          if [ -f ~/.kube/config ]; then
+            cp ~/.kube/config ~/.kube/config.bak.$(date +%Y%m%d%H%M%S)
+            # Drop stale homelab entries so a rebuilt cluster's fresh certs win
+            # (kubectl merge is "first-wins", so old entries would otherwise persist).
+            kubectl config delete-context homelab >/dev/null 2>&1 || true
+            kubectl config delete-cluster homelab >/dev/null 2>&1 || true
+            kubectl config delete-user    homelab >/dev/null 2>&1 || true
+          fi
+          KUBECONFIG="$HOME/.kube/config:$HOMELAB_KUBECONFIG" \
+            kubectl config view --flatten > ~/.kube/config.new
+          mv ~/.kube/config.new ~/.kube/config
+          chmod 600 ~/.kube/config
+      environment:
+        HOMELAB_KUBECONFIG: "{{ playbook_dir }}/homelab.kubeconfig"
       delegate_to: localhost
       become: false
       run_once: true
