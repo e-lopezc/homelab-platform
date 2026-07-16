@@ -44,16 +44,18 @@ cluster to Git — every change after that is a commit.
 
 ```text
 infra/terraform/   # Proxmox VMs
-infra/ansible/     # k3s bootstrap          (planned)
-clusters/homelab/  # flux bootstrap target  (planned)
-infrastructure/    # platform services      (planned)
-apps/              # workloads              (planned)
+infra/ansible/     # k3s bootstrap
+clusters/homelab/  # Flux entry point (bootstrap target)
+platform/          # platform services: cert-manager, ingress, monitoring   (planned)
+apps/              # application workloads                                   (planned)
 docs/              # runbooks
 ```
 
 ## Status
 
-**Phase 1 — Foundation:** Terraform provisioning complete; Ansible / k3s bootstrap next.
+**Phase 1 — Foundation:** ✅ complete — Terraform + Ansible reproduce the k3s cluster
+(destroy/rebuild verified). **Phase 2 — GitOps:** in progress — Flux directory structure
+scaffolded; `flux bootstrap` next.
 Roadmap: Foundation → GitOps → Platform services → Observability → App + secrets → AIOps.
 
 ## Security

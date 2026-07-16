@@ -57,9 +57,9 @@ homelab-platform/
 │   ├── terraform/        # Proxmox VMs
 │   └── ansible/          # k3s bootstrap
 ├── clusters/homelab/     # flux bootstrap target (gotk-* manifests land here)
-│   ├── infrastructure.yaml
+│   ├── platform.yaml
 │   └── apps.yaml
-├── infrastructure/       # platform services: cert-manager, ingress, monitoring, ESO
+├── platform/             # platform services: cert-manager, ingress, monitoring, ESO
 │   ├── controllers/
 │   └── configs/
 └── apps/                 # workloads

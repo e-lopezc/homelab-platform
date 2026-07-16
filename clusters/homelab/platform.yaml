@@ -1,0 +1,37 @@
+# Flux Kustomizations that reconcile the platform layer.
+# platform-controllers installs operators (cert-manager, ESO, monitoring…);
+# platform-configs applies the CRs that depend on them — and only after the
+# controllers report Ready (dependsOn + wait). Both paths are empty until Phase 3.
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: platform-controllers
+  namespace: flux-system
+spec:
+  interval: 1h
+  retryInterval: 1m
+  timeout: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./platform/controllers
+  prune: true
+  wait: true
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: platform-configs
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: platform-controllers
+  interval: 1h
+  retryInterval: 1m
+  timeout: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./platform/configs
+  prune: true
