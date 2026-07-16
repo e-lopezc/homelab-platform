@@ -1,0 +1,20 @@
+# Flux Kustomization for application workloads. Reconciles last — only after the
+# platform layer (platform-configs) is Ready. Empty until we deploy a real app.
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: apps
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: platform-configs
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./apps
+  prune: true
+  wait: true

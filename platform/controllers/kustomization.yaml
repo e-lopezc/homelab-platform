@@ -1,0 +1,5 @@
+# Platform controllers / operators (cert-manager, External Secrets, monitoring…).
+# Intentionally empty for Phase 2 — the first HelmRelease lands here in Phase 3.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: []
