@@ -1,5 +1,6 @@
-# Cluster config that depends on the controllers above (e.g. ClusterIssuer,
-# IngressClass). Intentionally empty for Phase 2.
+# Cluster config that depends on the controllers above (issuers, Traefik config).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-resources: []
+resources:
+  - cert-manager
+  - traefik

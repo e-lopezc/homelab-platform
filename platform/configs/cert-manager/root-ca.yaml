@@ -1,0 +1,21 @@
+# The homelab's self-signed ROOT CA. Signed by the selfsigned issuer; its key/cert land in
+# the homelab-root-ca secret (in cert-manager's namespace, where CA ClusterIssuers read from).
+# Trust this one cert on your machines and every homelab service cert chains to it.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: homelab-root-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: homelab-root-ca
+  secretName: homelab-root-ca
+  duration: 87600h    # 10 years
+  renewBefore: 720h   # 30 days
+  privateKey:
+    algorithm: ECDSA
+    size: 384
+  issuerRef:
+    name: selfsigned
+    kind: ClusterIssuer
+    group: cert-manager.io

@@ -1,0 +1,15 @@
+# Formalizes k3s's bundled Traefik: k3s still owns the INSTALL, but its config now lives in
+# Git. k3s's helm-controller watches this HelmChartConfig and merges these values into the
+# bundled traefik chart. Here: redirect all plain HTTP (web) to HTTPS (websecure).
+# NOTE: if this ever no-ops, verify the values keys against the k3s traefik chart (traefik-40.x).
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    ports:
+      web:
+        redirectTo:
+          port: websecure
