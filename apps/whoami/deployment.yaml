@@ -1,0 +1,66 @@
+# Tiny demo workload. Runs on :8080 so it can run as non-root (ports <1024 need privilege).
+# Namespace comes from kustomization.yaml — not repeated here, so this file is copy-paste safe.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whoami
+  labels:
+    app.kubernetes.io/name: whoami
+    app.kubernetes.io/instance: whoami
+spec:
+  replicas: 1
+  selector:
+    # IMMUTABLE after first apply — changing these means deleting and recreating the
+    # Deployment. Using the app.kubernetes.io/* standard from day one is what lets Phase 4's
+    # kube-prometheus-stack and Grafana's built-in workload dashboards find this automatically.
+    matchLabels:
+      app.kubernetes.io/name: whoami
+      app.kubernetes.io/instance: whoami
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: whoami
+        app.kubernetes.io/instance: whoami
+    spec:
+      # whoami never talks to the Kubernetes API, so don't hand it a token.
+      automountServiceAccountToken: false
+      containers:
+        - name: whoami
+          image: traefik/whoami:v1.11.0
+          args: ["-port", "8080"]
+          ports:
+            - name: http
+              containerPort: 8080
+          # readiness gates traffic and rollouts; liveness restarts a hung process.
+          # The `apps` Flux Kustomization has wait: true, so "Ready" should mean
+          # "actually serving" — without a probe it would only mean "process started".
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              # Memory limit but deliberately NO CPU limit: memory is incompressible (a leak
+              # must be capped), whereas a CPU limit only adds CFS throttling latency. The
+              # cpu request alone is enough to guarantee a share under contention.
+              memory: 32Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault

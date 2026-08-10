@@ -46,16 +46,17 @@ cluster to Git — every change after that is a commit.
 infra/terraform/   # Proxmox VMs
 infra/ansible/     # k3s bootstrap
 clusters/homelab/  # Flux entry point (bootstrap target)
-platform/          # platform services: cert-manager, ingress, monitoring   (planned)
-apps/              # application workloads                                   (planned)
+platform/          # platform services: cert-manager, ingress, monitoring
+apps/              # application workloads
 docs/              # runbooks
 ```
 
 ## Status
 
 **Phase 1 — Foundation:** ✅ complete — Terraform + Ansible reproduce the k3s cluster
-(destroy/rebuild verified). **Phase 2 — GitOps:** in progress — Flux directory structure
-scaffolded; `flux bootstrap` next.
+(destroy/rebuild verified). **Phase 2 — GitOps:** ✅ complete — `flux bootstrap` done,
+Git is the source of truth. **Phase 3 — Platform services:** cert-manager + internal CA +
+formalized Traefik ingress, open as [PR #6](https://github.com/e-lopezc/homelab-platform/pull/6), pending merge.
 Roadmap: Foundation → GitOps → Platform services → Observability → App + secrets → AIOps.
 
 ## Security

@@ -41,6 +41,7 @@ age.key
 *.swp
 .idea/
 .vscode/
+.claude/
 
 # ── Local-only docs (working notes, not for the public repo) ──
 docs/PROGRESS.md
