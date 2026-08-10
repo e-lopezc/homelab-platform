@@ -1,11 +1,11 @@
 # Routes https://whoami.homelab to the whoami service via Traefik. The cert-manager annotation
 # tells ingress-shim to auto-create a Certificate (issued by homelab-ca-issuer) into whoami-tls,
-# which Traefik then serves. Change the host here to rename the endpoint.
+# which Traefik then serves — this one annotation is the whole "give my service TLS" contract.
+# Change the host below (both places) to rename the endpoint. Namespace comes from kustomization.yaml.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: whoami
-  namespace: whoami
   annotations:
     cert-manager.io/cluster-issuer: homelab-ca-issuer
 spec:

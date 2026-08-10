@@ -1,5 +1,24 @@
+# Reference app — copy this directory to onboard a new service.
+# To fork it, you only edit THIS file plus the host in ingress.yaml:
+#   1. `namespace:` below           2. the `app.kubernetes.io/instance` label
+#   3. `host:`/`tls.hosts` in ingress.yaml
+# The resource files themselves carry no namespace, so they need no edits at all.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
+# Sets metadata.namespace on every resource below — the single place it's declared.
+namespace: whoami
+
+# Shared metadata. includeSelectors: false is deliberate: Deployment/Service selectors are
+# IMMUTABLE once applied, so they must stay pinned to the explicit name/instance labels in
+# deployment.yaml. Letting a transformer inject into selectors would make a future label
+# change a delete-and-recreate.
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: homelab-platform
+      app.kubernetes.io/managed-by: flux
+    includeSelectors: false
+
 resources:
   - namespace.yaml
   - deployment.yaml

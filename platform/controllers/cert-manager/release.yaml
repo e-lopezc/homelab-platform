@@ -8,6 +8,11 @@ metadata:
   namespace: cert-manager
 spec:
   interval: 1h
+  # Default is 5m. cert-manager cold-pulls four images (controller, webhook, cainjector,
+  # startupapicheck) and its post-install `startupapicheck` hook Job waits on the webhook —
+  # over home broadband that can exceed 5m, which would fail the install and trigger the
+  # remediation uninstall/reinstall loop below. 10m is headroom for a from-zero rebuild.
+  timeout: 10m
   chart:
     spec:
       chart: cert-manager
@@ -26,3 +31,10 @@ spec:
     crds:
       enabled: true
       keep: true
+    # The outer timeout above bounds the whole release, but the post-install
+    # startupapicheck hook Job has its own independent ceiling: default 1m per
+    # attempt x backoffLimit 4 retries. A cold webhook image pull can exhaust
+    # that inner budget and hard-fail the release before the outer timeout
+    # ever fires. Give each attempt real headroom instead of relying on retries.
+    startupapicheck:
+      timeout: 3m

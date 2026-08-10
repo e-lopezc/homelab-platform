@@ -1,7 +1,17 @@
 # Formalizes k3s's bundled Traefik: k3s still owns the INSTALL, but its config now lives in
 # Git. k3s's helm-controller watches this HelmChartConfig and merges these values into the
-# bundled traefik chart. Here: redirect all plain HTTP (web) to HTTPS (websecure).
-# NOTE: if this ever no-ops, verify the values keys against the k3s traefik chart (traefik-40.x).
+# bundled traefik chart.
+#
+# POLICY: all plain HTTP is redirected to HTTPS, cluster-wide. This is an *entrypoint*-level
+# redirect, so it applies to every router on port 80 — there is no per-Ingress opt-out.
+# Consequences to remember: ACME HTTP-01 challenges cannot work behind it (use DNS-01), and
+# blackbox probes must target https:// (with the homelab CA trusted) or they'll see a 301.
+#
+# Values keys verified against the chart k3s v1.36.2+k3s1 actually ships:
+# traefik-40.1.3+up40.1.0 (Traefik 3.7.4). The older `ports.web.redirectTo` key does NOT
+# exist in this chart, and Rancher's repackaged copy ships no values.schema.json — so a
+# wrong key here is accepted, ignored, and reported as success. Verify behaviour, not status:
+#   curl -sI http://<host>/ | head -1   # expect: HTTP/1.1 301 Moved Permanently
 apiVersion: helm.cattle.io/v1
 kind: HelmChartConfig
 metadata:
@@ -11,5 +21,9 @@ spec:
   valuesContent: |-
     ports:
       web:
-        redirectTo:
-          port: websecure
+        http:
+          redirections:
+            entryPoint:
+              to: websecure
+              scheme: https
+              permanent: true

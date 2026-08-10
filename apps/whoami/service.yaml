@@ -1,12 +1,14 @@
+# Namespace comes from kustomization.yaml. The selector must match the Deployment's
+# immutable matchLabels exactly.
 apiVersion: v1
 kind: Service
 metadata:
   name: whoami
-  namespace: whoami
 spec:
   selector:
-    app: whoami
+    app.kubernetes.io/name: whoami
+    app.kubernetes.io/instance: whoami
   ports:
     - name: http
       port: 80
-      targetPort: 8080
+      targetPort: http

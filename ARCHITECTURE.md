@@ -43,8 +43,20 @@ deliberately shaped to mirror real production patterns.
 | **Secrets** | External Secrets Operator + self-hosted OpenBao | Mirrors a real ESO + cloud-secrets-manager setup, kept $0 |
 | **Observability** | kube-prometheus-stack + Loki + OpenCost | Metrics, logs, and on-prem cost/right-sizing |
 | **AIOps** | k8sgpt / HolmesGPT + self-hosted LLM (Ollama) | Plain-English troubleshooting and cost insight |
-| **CI** | GitHub Actions | gitleaks scan, `terraform validate`, manifest lint |
+| **CI** *(planned)* | GitHub Actions | gitleaks scan, `terraform validate`, manifest lint |
 | **Registry** | GitHub Container Registry (`ghcr.io`) | Free for public images |
+
+> **ADR — Ingress:** kept k3s's bundled Traefik rather than installing a second,
+> upstream copy. k3s already owns Traefik's lifecycle via its own embedded
+> helm-controller and a generated `HelmChart` object; running a Flux-managed
+> Traefik release alongside it would either conflict with that controller or
+> require disabling it — extra moving parts for no real gain on a single-purpose
+> LAN cluster. Phase 3 formalizes config-in-Git instead, via a `HelmChartConfig`
+> (`platform/configs/traefik/`) that k3s's own controller merges in. Trade-off:
+> config lives in a k3s-specific CRD rather than a standard Flux `HelmRelease`,
+> and values must be checked against the exact Rancher-repackaged chart k3s
+> ships — it silently drops unknown keys rather than rejecting them (see
+> `helmchartconfig.yaml`), unlike the upstream chart's schema-validated copy.
 
 ---
 
@@ -88,7 +100,7 @@ flowchart LR
 2. `flux bootstrap github` installs Flux and points it at this repo — the **last
    manual `kubectl` you run**.
 3. Flux reconciles `clusters/homelab/`, pulling in everything under
-   `infrastructure/` and `apps/`. From here, every change is a Git commit.
+   `platform/` and `apps/`. From here, every change is a Git commit.
 4. Secret-bearing workloads use **ExternalSecret** resources; ESO fetches the real
    values from **OpenBao** (running outside the cluster).
 5. The **AIOps agent** reads telemetry and calls a **self-hosted LLM** to surface
@@ -107,7 +119,7 @@ The repo is **public**, so nothing sensitive is ever committed:
 - **Gitignored:** `*.tfstate*` (plaintext state), `*.tfvars` (host IPs/config),
   `kubeconfig`, `.env`. Committed `*.example` files document the expected shape.
 - **No secrets in Git** — values live in OpenBao and are pulled at runtime via ESO.
-- **gitleaks** runs as a pre-commit hook *and* in CI to block accidental leaks.
+- **gitleaks** *(planned)* — pre-commit hook and CI scan to block accidental leaks; not yet wired up.
 - **Internal CA** keeps TLS fully on-LAN with no public exposure.
 
 *Future hardening:* migrate OpenBao auth to Kubernetes auth, add network policies
