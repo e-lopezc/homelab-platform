@@ -77,7 +77,7 @@ plain `http://` redirects to `https://`.
 was invisible to every `kubectl`/`flux` status check above; the values key was silently
 accepted and ignored. Confirm the redirect actually happens:
 ```
-curl -sI http://whoami.homelab/ | head -1   # expect: HTTP/1.1 301 Moved Permanently
+curl -sI http://whoami.homelab/ | head -1   # expect: HTTP/1.1 308 Permanent Redirect
 ```
 
 ## 7. Known trade-off — the CA is rebuilt, not backed up
