@@ -55,8 +55,9 @@ docs/              # runbooks
 
 **Phase 1 — Foundation:** ✅ complete — Terraform + Ansible reproduce the k3s cluster
 (destroy/rebuild verified). **Phase 2 — GitOps:** ✅ complete — `flux bootstrap` done,
-Git is the source of truth. **Phase 3 — Platform services:** cert-manager + internal CA +
-formalized Traefik ingress, open as [PR #6](https://github.com/e-lopezc/homelab-platform/pull/6), pending merge.
+Git is the source of truth. **Phase 3 — Platform services:** ✅ complete — cert-manager +
+internal CA + formalized Traefik ingress, merged via [PR #6](https://github.com/e-lopezc/homelab-platform/pull/6)
+and [PR #7](https://github.com/e-lopezc/homelab-platform/pull/7). **Phase 4 — Observability:** next up.
 Roadmap: Foundation → GitOps → Platform services → Observability → App + secrets → AIOps.
 
 ## Security
