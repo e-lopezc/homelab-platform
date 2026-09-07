@@ -4,3 +4,25 @@
 # (https://update.k3s.io/v1-release/channels). Re-check before a fresh install:
 #   https://github.com/k3s-io/k3s/releases
 k3s_version: "v1.36.2+k3s1"
+
+# Workload-placement labels, applied by the k3s_node_labels role (not by k3s's
+# --node-label install flag — see that role's comments for why).
+#
+# WHY THESE EXIST: the default StorageClass is `local-path` with
+# WaitForFirstConsumer, so a PV is carved out of whichever node the pod first lands
+# on and is then stamped with that node's affinity — the workload is pinned there
+# permanently, and the PV cannot be expanded or moved afterwards. Stateful workloads
+# are therefore placed deliberately rather than left to the scheduler, whose view is
+# skewed by platform controllers that under-declare their resource requests.
+#
+# Current placement (Phase 4 observability):
+#   metrics -> k3s-agent-2, the quietest node. Keeps Prometheus's TSDB off the
+#              control plane, and away from agent-1's helm/source controllers, which
+#              spike during HelmRelease reconciles.
+#   logs    -> k3s-agent-1. Prometheus (~2.6Gi) and Loki (~1.3Gi) together do not fit
+#              in a single agent's 4.4Gi allocatable, so they are split.
+k3s_node_labels:
+  k3s-agent-1:
+    - homelab.local/observability=logs
+  k3s-agent-2:
+    - homelab.local/observability=metrics

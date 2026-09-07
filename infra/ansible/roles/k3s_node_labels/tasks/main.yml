@@ -1,0 +1,32 @@
+---
+# Applies workload-placement labels to the cluster's nodes.
+#
+# These are deliberately NOT set via k3s's `--node-label` install flag: that flag only
+# takes effect when the node first registers, and the install tasks are guarded by
+# `creates:`, so changing a label later would mean reinstalling the node. Labels are
+# cluster state, not install state — so they get their own re-runnable role, driven by
+# `k3s_node_labels` in group_vars/all.yml.
+
+- name: Wait until every node is registered and Ready
+  ansible.builtin.command: k3s kubectl get nodes --no-headers
+  register: k3s_all_nodes
+  until: >-
+    k3s_all_nodes.stdout_lines | length == (groups['server'] | length + groups['agents'] | length)
+    and k3s_all_nodes.stdout_lines | select('search', '\\sReady\\s') | list | length
+        == k3s_all_nodes.stdout_lines | length
+  retries: 20
+  delay: 6
+  changed_when: false
+
+- name: Apply workload-placement labels
+  # --overwrite makes this idempotent in the "value changed" case too; without it kubectl
+  # errors out rather than updating an existing label.
+  ansible.builtin.command:
+    argv: "{{ ['k3s', 'kubectl', 'label', 'node', item.0.key, '--overwrite', item.1] }}"
+  loop: "{{ k3s_node_labels | dict2items | subelements('value') }}"
+  loop_control:
+    label: "{{ item.0.key }} -> {{ item.1 }}"
+  register: node_label
+  # kubectl prints "node/<name> labeled" on a change and "node/<name> not labeled" when the
+  # label was already present with that value — so report changed only when it really changed.
+  changed_when: "'not labeled' not in node_label.stdout"
