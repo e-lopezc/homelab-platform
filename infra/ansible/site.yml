@@ -12,6 +12,12 @@
   roles:
     - k3s_agent
 
+- name: Label nodes for workload placement
+  hosts: server
+  gather_facts: false
+  roles:
+    - k3s_node_labels
+
 - name: Fetch kubeconfig and merge into ~/.kube/config
   hosts: server
   gather_facts: false
