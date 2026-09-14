@@ -8,8 +8,9 @@ metadata:
 spec:
   interval: 1h
   # Must stay below platform-controllers' 15m timeout. The chart cold-pulls several images
-  # (operator, prometheus, config-reloader, alertmanager, node-exporter, kube-state-metrics).
-  timeout: 10m
+  # (operator, prometheus, config-reloader, alertmanager, node-exporter, kube-state-metrics,
+  # webhook cert job) — roughly twice cert-manager's four, hence more than its 10m.
+  timeout: 12m
   chart:
     spec:
       chart: kube-prometheus-stack
@@ -32,8 +33,47 @@ spec:
   values:
     grafana:
       enabled: false
+
+    # k3s runs every control-plane component inside one process, and every metrics
+    # endpoint on a node returns that process's whole registry. The kubelet endpoint on
+    # the server already carries scheduler_, controller-manager and kubeproxy_ metrics
+    # (agents carry kubeproxy_). The chart's dedicated jobs would target ports bound to
+    # localhost and report TargetDown, and would only duplicate data if they worked. The
+    # datastore is kine/SQLite (no --cluster-init), so there is no etcd to scrape.
+    kubeControllerManager:
+      enabled: false
+    kubeScheduler:
+      enabled: false
+    kubeProxy:
+      enabled: false
+    kubeEtcd:
+      enabled: false
+
+    # Same cause, other direction: the server's kubelet endpoint and the apiserver endpoint
+    # return the same ~35k series. Keep apiserver_/etcd_/kine_ on the apiserver job, whose
+    # recording and SLO burn-rate rules expect job="apiserver", and drop them from kubelet.
+    kubelet:
+      serviceMonitor:
+        # Helm replaces lists rather than merging them, so the chart's default rule
+        # (first entry) must be restated or it is lost.
+        metricRelabelings:
+          - action: drop
+            sourceLabels: [__name__, le]
+            regex: (csi_operations|storage_operation_duration)_seconds_bucket;(0.25|2.5|15|25|120|600)(\.0)?
+          - action: drop
+            sourceLabels: [__name__]
+            regex: (apiserver|etcd|kine)_.*
+
     prometheus:
       prometheusSpec:
+        # By default Prometheus only selects monitors and rules labelled with this Helm
+        # release, so anything written outside the chart is silently ignored. Single-operator
+        # cluster: every monitor in Git is intentional, so select them all.
+        serviceMonitorSelectorNilUsesHelmValues: false
+        podMonitorSelectorNilUsesHelmValues: false
+        ruleSelectorNilUsesHelmValues: false
+        probeSelectorNilUsesHelmValues: false
+        scrapeConfigSelectorNilUsesHelmValues: false
         # local-path + WaitForFirstConsumer pins the PV to whichever node the pod first
         # lands on, so choose that node deliberately (label applied by the k3s_node_labels
         # Ansible role). Loki pins to `logs` on agent-1, keeping the two stores apart.

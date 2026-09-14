@@ -11,9 +11,9 @@ metadata:
 spec:
   interval: 1h
   retryInterval: 1m
-  # Must be >= the longest HelmRelease timeout in this path (cert-manager: 10m), otherwise
-  # this Kustomization reports Ready=False while the release underneath is still installing
-  # happily. Phase 4's kube-prometheus-stack will need this headroom too.
+  # Must be >= the longest HelmRelease timeout in this path (kube-prometheus-stack: 12m),
+  # otherwise this Kustomization reports Ready=False while the release underneath is still
+  # installing happily.
   timeout: 15m
   sourceRef:
     kind: GitRepository
