@@ -1,0 +1,104 @@
+# kube-prometheus-stack: Prometheus Operator, Prometheus, Alertmanager, node-exporter and
+# kube-state-metrics. Grafana ships in this chart but is enabled on its own branch.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-prometheus-stack
+  namespace: monitoring
+spec:
+  interval: 1h
+  # Must stay below platform-controllers' 15m timeout. The chart cold-pulls several images
+  # (operator, prometheus, config-reloader, alertmanager, node-exporter, kube-state-metrics,
+  # webhook cert job) — roughly twice cert-manager's four, hence more than its 10m.
+  timeout: 12m
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      version: "91.4.0"
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+        namespace: monitoring
+  # Helm installs CRDs from a chart's crds/ directory once and never upgrades them. A chart
+  # bump would then run a newer operator against stale CRDs. CreateReplace makes Flux
+  # update the CRDs on every install and upgrade.
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  values:
+    grafana:
+      enabled: false
+
+    # k3s runs every control-plane component inside one process, and every metrics
+    # endpoint on a node returns that process's whole registry. The kubelet endpoint on
+    # the server already carries scheduler_, controller-manager and kubeproxy_ metrics
+    # (agents carry kubeproxy_). The chart's dedicated jobs would target ports bound to
+    # localhost and report TargetDown, and would only duplicate data if they worked. The
+    # datastore is kine/SQLite (no --cluster-init), so there is no etcd to scrape.
+    kubeControllerManager:
+      enabled: false
+    kubeScheduler:
+      enabled: false
+    kubeProxy:
+      enabled: false
+    kubeEtcd:
+      enabled: false
+
+    # Same cause, other direction: the server's kubelet endpoint and the apiserver endpoint
+    # return the same ~35k series. Keep apiserver_/etcd_/kine_ on the apiserver job, whose
+    # recording and SLO burn-rate rules expect job="apiserver", and drop them from kubelet.
+    kubelet:
+      serviceMonitor:
+        # Helm replaces lists rather than merging them, so the chart's default rule
+        # (first entry) must be restated or it is lost.
+        metricRelabelings:
+          - action: drop
+            sourceLabels: [__name__, le]
+            regex: (csi_operations|storage_operation_duration)_seconds_bucket;(0.25|2.5|15|25|120|600)(\.0)?
+          - action: drop
+            sourceLabels: [__name__]
+            regex: (apiserver|etcd|kine)_.*
+
+    prometheus:
+      prometheusSpec:
+        # By default Prometheus only selects monitors and rules labelled with this Helm
+        # release, so anything written outside the chart is silently ignored. Single-operator
+        # cluster: every monitor in Git is intentional, so select them all.
+        serviceMonitorSelectorNilUsesHelmValues: false
+        podMonitorSelectorNilUsesHelmValues: false
+        ruleSelectorNilUsesHelmValues: false
+        probeSelectorNilUsesHelmValues: false
+        scrapeConfigSelectorNilUsesHelmValues: false
+        # local-path + WaitForFirstConsumer pins the PV to whichever node the pod first
+        # lands on, so choose that node deliberately (label applied by the k3s_node_labels
+        # Ansible role). Loki pins to `logs` on agent-1, keeping the two stores apart.
+        nodeSelector:
+          homelab.local/observability: metrics
+        # Whichever limit is hit first wins. local-path does not enforce the PVC size (the
+        # volume is a directory on the node's root disk), so retentionSize is the real disk
+        # cap. It counts blocks, WAL and head chunks.
+        retention: 30d
+        retentionSize: 12GiB
+        # The request lets the scheduler see agent-2 as occupied, so unpinned pods land
+        # elsewhere. k3s reserves no memory for the OS, so the limit protects the node:
+        # a heavy query OOM-kills Prometheus, not the kubelet.
+        resources:
+          requests:
+            memory: 1.5Gi
+          limits:
+            memory: 2.5Gi
+        # local-path volumes cannot be expanded; this size is nominal but documents intent.
+        storageSpec:
+          volumeClaimTemplate:
+            spec:
+              storageClassName: local-path
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 15Gi
