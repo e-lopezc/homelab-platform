@@ -27,7 +27,14 @@ which has to be done by hand before Flux reconciles.
 
   To rotate the password, update the Secret, then run
   `kubectl -n monitoring rollout restart deploy/kube-prometheus-stack-grafana`.
-  The database is an emptyDir, so the new password applies on restart.
+  Grafana only reads the admin password from the environment when it creates its database.
+  The database is an emptyDir, so every new pod creates it fresh and picks up the new
+  password. If it doesn't take, reset it in the new pod from the value it already holds,
+  so the password stays off the command line:
+  ```
+  kubectl -n monitoring exec deploy/kube-prometheus-stack-grafana -c grafana -- \
+    sh -c 'grafana cli admin reset-admin-password "$GF_SECURITY_ADMIN_PASSWORD"'
+  ```
 
 - **Resolve the hostname**: same as whoami, e.g. add to `/etc/hosts`
   ```

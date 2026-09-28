@@ -69,13 +69,24 @@ spec:
       # Starting point, not measured. The limit has headroom because the SQLite DB is an
       # emptyDir: every start re-runs all migrations and rebuilds the search index, and an
       # OOM there fails the whole release. Revisit with Prometheus data after a week.
+      # Pod total, sidecars included: 256Mi request / 768Mi limit.
       resources:
         requests:
           memory: 128Mi
         limits:
           memory: 512Mi
-      # The dashboard and datasource sidecars share this block.
+
+      # The chart's own sidecar ClusterRole grants cluster-wide read on Secrets. Bind to a
+      # ConfigMap-only role instead (grafana-sidecar-clusterrole.yaml), and point both
+      # sidecars at ConfigMaps only, or they keep listing Secrets and hit 403s.
+      rbac:
+        useExistingClusterRole: grafana-sidecar-configmaps
       sidecar:
+        dashboards:
+          resource: configmap
+        datasources:
+          resource: configmap
+        # Applies to each sidecar container (dashboards and datasources), so it counts twice.
         resources:
           requests:
             memory: 64Mi

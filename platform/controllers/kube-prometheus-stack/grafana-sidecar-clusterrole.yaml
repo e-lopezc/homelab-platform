@@ -1,0 +1,12 @@
+# Replaces the Grafana chart's sidecar ClusterRole, which hardcodes cluster-wide read on
+# Secrets as well as ConfigMaps. Every dashboard and datasource here is a ConfigMap, so the
+# sidecars keep watching ALL namespaces but can no longer read any Secret in the cluster.
+# Wired in via grafana.rbac.useExistingClusterRole in release.yaml.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: grafana-sidecar-configmaps
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "watch", "list"]
