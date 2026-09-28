@@ -1,5 +1,5 @@
 # kube-prometheus-stack: Prometheus Operator, Prometheus, Alertmanager, node-exporter and
-# kube-state-metrics. Grafana ships in this chart but is enabled on its own branch.
+# kube-state-metrics, and Grafana with the Prometheus and Alertmanager datasources wired in.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -32,7 +32,55 @@ spec:
       retries: 3
   values:
     grafana:
-      enabled: false
+      enabled: true
+
+      # Admin credentials come from a Secret created out-of-band (kubectl create secret),
+      # so no password lands in this public repo. External Secrets Operator takes over
+      # this Secret in Phase 5. It must exist before this release is upgraded, or Grafana
+      # cannot start and the whole kube-prometheus-stack upgrade fails and rolls back.
+      admin:
+        existingSecret: grafana-admin
+
+      # Stateless by design: no PVC, no nodeSelector. Dashboards and datasources are
+      # provisioned from labelled ConfigMaps by the sidecar, so they live in Git. A restart
+      # loses only what was clicked into the UI (users, API tokens, edits). The sidecar already searches ALL namespaces
+      # (chart default), so later Loki and OpenCost dashboards are picked up in place.
+
+      # Same contract as whoami: the annotation has cert-manager issue grafana-tls from
+      # the internal CA, and Traefik serves it.
+      ingress:
+        enabled: true
+        ingressClassName: traefik
+        annotations:
+          cert-manager.io/cluster-issuer: homelab-ca-issuer
+        hosts:
+          - grafana.homelab
+        tls:
+          - secretName: grafana-tls
+            hosts:
+              - grafana.homelab
+
+      # Behind an ingress Grafana must know its public URL, or redirects and share
+      # links point at the pod address.
+      grafana.ini:
+        server:
+          root_url: https://grafana.homelab
+
+      # Starting point, not measured. The limit has headroom because the SQLite DB is an
+      # emptyDir: every start re-runs all migrations and rebuilds the search index, and an
+      # OOM there fails the whole release. Revisit with Prometheus data after a week.
+      resources:
+        requests:
+          memory: 128Mi
+        limits:
+          memory: 512Mi
+      # The dashboard and datasource sidecars share this block.
+      sidecar:
+        resources:
+          requests:
+            memory: 64Mi
+          limits:
+            memory: 128Mi
 
     # k3s runs every control-plane component inside one process, and every metrics
     # endpoint on a node returns that process's whole registry. The kubelet endpoint on
