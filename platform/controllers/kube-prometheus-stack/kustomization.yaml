@@ -3,4 +3,5 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - repository.yaml
+  - grafana-sidecar-clusterrole.yaml
   - release.yaml
