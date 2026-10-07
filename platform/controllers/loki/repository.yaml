@@ -1,0 +1,9 @@
+# Helm chart source for Loki (and Alloy, later on this branch).
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  interval: 24h
+  url: https://grafana.github.io/helm-charts

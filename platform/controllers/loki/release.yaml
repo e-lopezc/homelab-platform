@@ -1,0 +1,64 @@
+# Loki in single-binary mode: one pod, chunks and index on its own PVC, no object store.
+# Shares the monitoring namespace (created by kube-prometheus-stack) with Grafana, its consumer.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: loki
+  namespace: monitoring
+spec:
+  interval: 1h
+  timeout: 10m
+  chart:
+    spec:
+      chart: loki
+      version: "7.3.0"
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: monitoring
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    # The chart defaults to SimpleScalable (3x read/write/backend on S3). Filesystem storage
+    # only supports one replica, and the chart refuses to render if any scalable target is
+    # left above zero.
+    deploymentMode: SingleBinary
+    singleBinary:
+      replicas: 1
+    read:
+      replicas: 0
+    write:
+      replicas: 0
+    backend:
+      replicas: 0
+
+    loki:
+      # Single tenant. With auth on, every client must send an X-Scope-OrgID header.
+      auth_enabled: false
+      commonConfig:
+        replication_factor: 1
+      storage:
+        type: filesystem
+      # Fixed at first install. The from date must not be in the future, and changing an
+      # existing period later makes stored chunks unreadable. Schema upgrades go in as a new entry.
+      schemaConfig:
+        configs:
+          - from: "2026-10-01"
+            store: tsdb
+            object_store: filesystem
+            schema: v13
+            index:
+              prefix: index_
+              period: 24h
+      # 7d retention, enforced by the compactor. Without retention_enabled, retention_period
+      # is ignored and chunks are kept forever. Unlike Prometheus there is no size cap, so a
+      # noisy pod can still fill agent-1's disk inside the 7d window. The node disk alert covers that.
+      compactor:
+        retention_enabled: true
+        delete_request_store: filesystem
+      limits_config:
+        retention_period: 168h
