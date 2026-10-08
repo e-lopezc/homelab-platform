@@ -27,14 +27,63 @@ spec:
     # only supports one replica, and the chart refuses to render if any scalable target is
     # left above zero.
     deploymentMode: SingleBinary
-    singleBinary:
-      replicas: 1
     read:
       replicas: 0
     write:
       replicas: 0
     backend:
       replicas: 0
+
+    # Pinned to the logs node (agent-1) so it never shares a node with Prometheus. Both hold
+    # a local-path PV, and they do not fit together in one agent's 4.3Gi. The memory figures are
+    # a first guess, sized like Prometheus was: agent-1 peaked at 0.98Gi used over 7d, which
+    # leaves ~3.3Gi for Loki and Alloy. Re-check against the week-one working set.
+    singleBinary:
+      replicas: 1
+      nodeSelector:
+        homelab.local/observability: logs
+      resources:
+        requests:
+          memory: 512Mi
+        limits:
+          memory: 1.5Gi
+      persistence:
+        # A label only: local-path does not enforce PVC size. retention_period is the real cap.
+        size: 10Gi
+        storageClass: local-path
+        # Chart default is Delete for both. Keep the PV when the StatefulSet is scaled to zero
+        # or deleted, so scale-to-zero stays a safe way to stop Loki without losing logs.
+        whenScaled: Retain
+        whenDeleted: Retain
+
+    # Chart defaults sized for a multi-tenant cluster. The memcached chunks cache alone
+    # requests 9830Mi, more than any node here has. At homelab ingest, Loki's own in-process
+    # caches are enough.
+    chunksCache:
+      enabled: false
+    resultsCache:
+      enabled: false
+    # nginx in front of Loki. Only useful for multi-tenant auth or the scalable read/write split.
+    # Grafana and Alloy talk to the loki Service directly.
+    gateway:
+      enabled: false
+    # The canary DaemonSet writes and queries synthetic logs on every node, and the helm test
+    # depends on it. Loki's own metrics cover health.
+    lokiCanary:
+      enabled: false
+    test:
+      enabled: false
+    # Alerting rules stay in Prometheus. Turning the rules sidecar off also empties the chart's
+    # ClusterRole, which otherwise grants cluster-wide read on Secrets, the same problem we
+    # fixed for Grafana's sidecar.
+    sidecar:
+      rules:
+        enabled: false
+    # Picked up by Prometheus because the kube-prometheus-stack selectors are open
+    # (*SelectorNilUsesHelmValues: false). Gives ingest rate and disk use for sizing.
+    monitoring:
+      serviceMonitor:
+        enabled: true
 
     loki:
       # Single tenant. With auth on, every client must send an X-Scope-OrgID header.
