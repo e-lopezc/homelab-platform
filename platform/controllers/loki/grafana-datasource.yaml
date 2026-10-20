@@ -1,0 +1,20 @@
+# Registers Loki as a Grafana datasource. Grafana's datasource sidecar watches the monitoring
+# namespace for ConfigMaps labelled grafana_datasource: "1" and hot-reloads them, the same way
+# the chart provisions Prometheus and Alertmanager. It lives with Loki, so removing Loki
+# removes its datasource too. The fixed uid lets dashboards in Git reference it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-grafana-datasource
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  loki-datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        type: loki
+        uid: loki
+        url: http://loki.monitoring:3100
+        access: proxy
