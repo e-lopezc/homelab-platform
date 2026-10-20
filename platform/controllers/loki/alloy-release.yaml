@@ -1,6 +1,5 @@
 # Grafana Alloy as the log shipper for Loki: one pod per node, tailing that node's container
-# logs from /var/log/pods. Lives with Loki because it has no other consumer. Skeleton only:
-# the pipeline (discovery, labels, push to Loki) lands in alloy.configMap.content next.
+# logs from /var/log/pods. Lives with Loki because it has no other consumer.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -90,12 +89,89 @@ spec:
       extraEnv:
         - name: GOMEMLIMIT
           value: 300MiB
-      # Placeholder until the pipeline piece. Left empty, the chart ships its example config.
+      # The pipeline: this node's pods -> 5 labels -> tail files -> parse CRI -> push to Loki.
+      # Checked with `alloy validate` (v1.20.1); discovery and relabelling dry-run against the
+      # cluster from a laptop.
       configMap:
         content: |
           logging {
             level  = "info"
             format = "logfmt"
+          }
+
+          // Pods on this node only. The chart sets HOSTNAME to spec.nodeName, so each instance of the
+          // DaemonSet watches its own node's pods and never tails another node's files.
+          discovery.kubernetes "pods" {
+            role = "pod"
+            selectors {
+              role  = "pod"
+              field = "spec.nodeName=" + sys.env("HOSTNAME")
+            }
+          }
+
+          // Labels are Loki's index: every unique combination is a separate stream. Keep four
+          // low-cardinality ones; app, version or request IDs stay in the log line and are searched there.
+          discovery.relabel "pod_logs" {
+            targets = discovery.kubernetes.pods.targets
+
+            rule {
+              source_labels = ["__meta_kubernetes_namespace"]
+              target_label  = "namespace"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_name"]
+              target_label  = "pod"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_container_name"]
+              target_label  = "container"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_node_name"]
+              target_label  = "node"
+            }
+            // The kubelet writes /var/log/pods/<namespace>_<pod>_<uid>/<container>/<n>.log. *.log skips
+            // rotated .gz files.
+            rule {
+              source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+              separator     = "/"
+              target_label  = "__path__"
+              replacement   = "/var/log/pods/*$1/*.log"
+            }
+            // Pod discovery emits one target per container port. Dropping everything else collapses
+            // them into one target per container, so no file is tailed twice.
+            rule {
+              action = "labelkeep"
+              regex  = "namespace|pod|container|node|__path__"
+            }
+          }
+
+          local.file_match "pod_logs" {
+            path_targets = discovery.relabel.pod_logs.output
+          }
+
+          loki.source.file "pod_logs" {
+            targets    = local.file_match.pod_logs.targets
+            forward_to = [loki.process.pod_logs.receiver]
+          }
+
+          // Parses containerd's line format (timestamp, stream, flags, message). Keeps the original
+          // timestamp, so lines re-read after a restart are exact duplicates that Loki drops. It also
+          // adds a stream label (stdout/stderr), cheap at two values.
+          loki.process "pod_logs" {
+            stage.cri {}
+            // loki.source.file adds the full file path as a label. It repeats pod and container and
+            // starts a new stream on every container restart.
+            stage.label_drop {
+              values = ["filename"]
+            }
+            forward_to = [loki.write.loki.receiver]
+          }
+
+          loki.write "loki" {
+            endpoint {
+              url = "http://loki.monitoring:3100/loki/api/v1/push"
+            }
           }
       # First guess for a 3-node homelab tailing a few dozen containers. agent-1 also carries
       # Loki (1.5Gi limit), with ~3.3Gi of headroom. Re-check against the week-one working set.
