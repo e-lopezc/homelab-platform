@@ -71,9 +71,11 @@ spec:
             mountPath: /var/log/pods
             readOnly: true
           - name: alloy-data
-            mountPath: /var/lib/alloy/data
+            mountPath: /alloy-data
       # Chart default is /tmp/alloy in the container's writable layer, lost on every restart.
-      storagePath: /var/lib/alloy/data
+      # Not under /var/lib/alloy: the image makes that 770 owned by uid 473, and root without
+      # capabilities cannot enter a directory it doesn't own.
+      storagePath: /alloy-data
       # Runs as root: the image sets no USER, and the pod log files are 0640 root-owned. Root
       # as owner needs no capabilities to read them, so everything else is locked down.
       securityContext:
