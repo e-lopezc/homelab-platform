@@ -1,6 +1,7 @@
-# Cluster config that depends on the controllers above (issuers, Traefik config).
+# Cluster config that depends on the controllers above (issuers, Traefik config, alert rules).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - cert-manager
   - traefik
+  - monitoring

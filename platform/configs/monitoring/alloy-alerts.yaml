@@ -1,0 +1,36 @@
+# Alerts on the log pipeline itself. Alloy failing silently is the failure mode
+# that matters: Loki stays up and Grafana still works, but logs stop arriving.
+# A dead Alloy pod is not covered here: kube-prometheus-stack's TargetDown and
+# KubeDaemonSet* alerts already fire for that.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alloy
+  namespace: monitoring
+spec:
+  groups:
+    - name: alloy
+      rules:
+        # Scraped (up) but not shipping. The `unless` form also fires when the sent
+        # counter is missing (e.g. loki.write renamed), which a plain `== 0` would miss.
+        # 15m rate window: the quietest node ships ~2 lines/min, so a 10m window leaves
+        # too little margin. Over 7 days this was true for at most 1m per pod (restarts).
+        - alert: AlloyNotShippingLogs
+          expr: |
+            up{job="alloy"} == 1
+              unless on (pod)
+            (sum by (pod) (rate(loki_write_sent_entries_total[15m])) > 0)
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Alloy {{ $labels.pod }} is running but has not sent log entries to Loki recently"
+            description: "Check `kubectl -n monitoring logs {{ $labels.pod }}` for write errors, then loki-0 health. If Loki is down, this alert is the symptom."
+        - alert: AlloyConfigReloadFailed
+          expr: alloy_config_last_load_successful == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Alloy {{ $labels.pod }} failed to load its config"
+            description: "Alloy keeps running the last good config; the new one is not applied."
