@@ -66,15 +66,20 @@ spec:
         server:
           root_url: https://grafana.homelab
 
-      # Starting point, not measured. The limit has headroom because the SQLite DB is an
-      # emptyDir: every start re-runs all migrations and rebuilds the search index, and an
-      # OOM there fails the whole release. Revisit with Prometheus data after a week.
-      # Pod total, sidecars included: 256Mi request / 768Mi limit.
+      # Measured 2026-10-28: ~320Mi idle; a cluster dashboard plus Loki Explore pushed it
+      # to the old 512Mi limit, where it thrashed for ~10 min and was OOMKilled. Request
+      # covers the idle baseline; the limit leaves ~2x for interactive use. GOMEMLIMIT
+      # makes the Go GC work harder near the limit instead of hitting the kernel OOM.
+      # The limit also covers startup: the SQLite DB is an emptyDir, so every start re-runs
+      # migrations and rebuilds the search index.
+      # Pod total, sidecars included: 512Mi request / 1Gi limit.
       resources:
         requests:
-          memory: 128Mi
+          memory: 384Mi
         limits:
-          memory: 512Mi
+          memory: 768Mi
+      env:
+        GOMEMLIMIT: 650MiB
 
       # The chart's own sidecar ClusterRole grants cluster-wide read on Secrets. Bind to a
       # ConfigMap-only role instead (grafana-sidecar-clusterrole.yaml), and point both
