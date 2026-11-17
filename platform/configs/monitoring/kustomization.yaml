@@ -2,3 +2,17 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - alloy-alerts.yaml
+
+# Dashboards are provisioned from Git: the Grafana sidecar picks up any ConfigMap
+# labelled grafana_dashboard="1" and loads it live, so Grafana itself stays stateless.
+configMapGenerator:
+  - name: dashboard-logs-pipeline
+    namespace: monitoring
+    files:
+      - dashboards/logs-pipeline.json
+    options:
+      # Nothing mounts this ConfigMap by name; the sidecar watches the label instead,
+      # so a content hash in the name would only add churn.
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
