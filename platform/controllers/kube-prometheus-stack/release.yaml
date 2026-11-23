@@ -128,6 +128,123 @@ spec:
             sourceLabels: [__name__]
             regex: (apiserver|etcd|kine)_.*
 
+    alertmanager:
+      alertmanagerSpec:
+        # Receiver URLs (ntfy topic, healthchecks.io ping) live in a Secret created
+        # out-of-band, never in Git. The operator mounts it at
+        # /etc/alertmanager/secrets/alertmanager-receivers/<key>, and receivers read it via
+        # url_file, so the rendered config only holds a path. It must exist before this
+        # release is upgraded, or Alertmanager cannot start. External Secrets Operator takes
+        # it over in Phase 5.
+        secrets:
+          - alertmanager-receivers
+
+      # Only keys set here change; the chart's global, inhibit_rules and templates are kept.
+      # Lists are replaced, not merged, so receivers must restate the chart's 'null'.
+      # tplConfig is false, so {{ }} below reaches Alertmanager untouched by Helm.
+      config:
+        receivers:
+          # Default sink: alerts that don't earn a phone notification stay in the UI.
+          - name: "null"
+
+          # Dead-man's switch. Watchdog always fires; healthchecks.io alarms when the pings
+          # stop. healthchecks.io stores request bodies, so send the status only — the
+          # default body carries externalURL/generatorURL (internal hostnames).
+          - name: healthchecks
+            webhook_configs:
+              - url_file: /etc/alertmanager/secrets/alertmanager-receivers/healthchecks-url
+                send_resolved: false
+                timeout: 10s
+                payload:
+                  status: "{{ .Status }}"
+
+          # Phone notifications via ntfy.sh. ntfy.sh is a third party that sees plaintext, so
+          # the payload replaces the default body: no instance, IPs, URLs or label sets leave
+          # the cluster. ntfy fills title/message/priority from the X-* header templates.
+          # Each rendered value is YAML-parsed by Alertmanager before JSON encoding, so a
+          # summary containing ": " would turn into a map; reReplaceAll defuses that.
+          # The two ntfy receivers differ only in priority. Duplicated on purpose: one receiver
+          # templating priority from severity would fail silently if the template broke.
+          - name: ntfy-default
+            webhook_configs:
+              - url_file: /etc/alertmanager/secrets/alertmanager-receivers/ntfy-url
+                send_resolved: true
+                timeout: 10s
+                http_config:
+                  http_headers:
+                    X-Template: { values: ["yes"] }
+                    X-Title: { values: ["{{.title}}"] }
+                    X-Message: { values: ["{{.message}}"] }
+                    X-Priority: { values: ["{{.priority}}"] }
+                payload:
+                  title: "{{ .Status | toUpper }} · {{ .CommonLabels.alertname }}"
+                  message: >-
+                    {{ or .CommonLabels.severity "none" }} · {{ or .CommonLabels.namespace "cluster" }} ·
+                    {{ reReplaceAll ": " " - " (or .CommonAnnotations.summary "no summary") }}
+                  priority: "3"
+
+          # Pages. Urgent while firing; the resolved message drops to default so the
+          # all-clear doesn't buzz like the page did.
+          - name: ntfy-high
+            webhook_configs:
+              - url_file: /etc/alertmanager/secrets/alertmanager-receivers/ntfy-url
+                send_resolved: true
+                timeout: 10s
+                http_config:
+                  http_headers:
+                    X-Template: { values: ["yes"] }
+                    X-Title: { values: ["{{.title}}"] }
+                    X-Message: { values: ["{{.message}}"] }
+                    X-Priority: { values: ["{{.priority}}"] }
+                payload:
+                  title: "{{ .Status | toUpper }} · {{ .CommonLabels.alertname }}"
+                  message: >-
+                    {{ or .CommonLabels.severity "none" }} · {{ or .CommonLabels.namespace "cluster" }} ·
+                    {{ reReplaceAll ": " " - " (or .CommonAnnotations.summary "no summary") }}
+                  priority: '{{ if eq .Status "firing" }}5{{ else }}3{{ end }}'
+
+        # Only routes is set: the chart's top-level route (receiver "null", group_by namespace,
+        # 30s/5m/12h) is kept, so anything unmatched below stays in the UI. First match wins.
+        # Paging is an explicit alertname allowlist, not severity: upstream "critical" covers
+        # 32 rules written for production clusters. Adding a page = a PR that adds the name and
+        # says why it is actionable. Regex matchers are fully anchored by Alertmanager.
+        route:
+          routes:
+            # Heartbeat. Ticks every 1m, re-sends every 5m: healthchecks.io period 5m, grace 5m.
+            - receiver: healthchecks
+              matchers:
+                - alertname = "Watchdog"
+              group_wait: 0s
+              group_interval: 1m
+              repeat_interval: 5m
+
+            # Phone routes group by alertname too, so CommonLabels.alertname (the
+            # notification title) is never empty when different alerts fire together.
+            - receiver: ntfy-default
+              matchers:
+                - alertname =~ "AlloyNotShippingLogs|AlloyConfigReloadFailed"
+              group_by: [alertname, namespace]
+
+            # Pages: the cluster is broken, or alerting itself silently is.
+            - receiver: ntfy-high
+              matchers:
+                - alertname =~ "KubeNodeNotReady|KubeletDown|KubeAPIDown|PrometheusBadConfig|PrometheusRuleFailures|AlertmanagerFailedReload"
+              group_by: [alertname, namespace]
+
+            # Disk, two tiers: critical (<10% free + full within 4h, or <3%) pages; warning
+            # (<15% + full within 24h, or <5%) notifies, a day's lead time to act calmly.
+            # The chart's inhibit rule mutes the warning once the critical fires.
+            - receiver: ntfy-high
+              matchers:
+                - alertname =~ "NodeFilesystemAlmostOutOfSpace|NodeFilesystemSpaceFillingUp"
+                - severity = "critical"
+              group_by: [alertname, namespace]
+            - receiver: ntfy-default
+              matchers:
+                - alertname =~ "NodeFilesystemAlmostOutOfSpace|NodeFilesystemSpaceFillingUp"
+                - severity = "warning"
+              group_by: [alertname, namespace]
+
     prometheus:
       prometheusSpec:
         # By default Prometheus only selects monitors and rules labelled with this Helm
